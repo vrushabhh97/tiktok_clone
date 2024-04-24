@@ -29,6 +29,7 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   cached_network_image: ^3.3.1
+  camera: ^0.10.5+9
   cloud_firestore: ^4.16.1
   cupertino_icons: ^1.0.6
   ffmpeg_kit_flutter: ^6.0.3
@@ -37,6 +38,8 @@ dependencies:
   firebase_storage: ^11.7.1
   flutter:
     sdk: flutter
+  gallery_saver:
+    path: /Users/vrushabhdeogirikar/Documents/GitHub/gallery_saver
   get: ^4.6.6
   image_picker: ^1.0.8
   timeago: ^3.6.1

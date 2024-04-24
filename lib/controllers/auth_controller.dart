@@ -1,37 +1,70 @@
 import 'dart:io';
+import 'package:camera/camera.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:gallery_saver/gallery_saver.dart';
 import 'package:tiktok_clone/constants.dart';
 import 'package:tiktok_clone/models/user.dart' as model;
 import 'package:tiktok_clone/views/screens/authentication/login_screen.dart';
-import 'package:tiktok_clone/views/screens/authentication/signup_screen.dart';
 import 'package:tiktok_clone/views/screens/home_screen.dart';
 
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
-
+  CameraController? cameraController;
+  List<CameraDescription>? cameras;
   late Rx<User?> _user;
-  //late Rx<File?> _pickedImage;
   Rx<File?> _pickedImage = Rx<File?>(null);
   File? get profilePhoto => _pickedImage.value;
 
   @override
   void onReady() {
-    // TODO: implement onReady
     super.onReady();
     _user = Rx<User?>(firebaseAuth.currentUser);
     _user.bindStream(firebaseAuth.authStateChanges());
     ever(_user, _setInitialScreen);
+    initializeCamera();
+  }
+
+  Future<void> initializeCamera() async {
+    cameras = await availableCameras();
+    cameraController = CameraController(
+      cameras!.firstWhere(
+          (camera) => camera.lensDirection == CameraLensDirection.front,
+          orElse: () => cameras!.first),
+      ResolutionPreset.medium,
+    );
+    await cameraController!.initialize();
+  }
+
+  Future<void> startRecording() async {
+    try {
+      if (cameraController != null &&
+          !cameraController!.value.isRecordingVideo) {
+        await cameraController!.startVideoRecording();
+      }
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to start recording: $e');
+    }
+  }
+
+  Future<void> stopRecordingAndSave() async {
+    if (cameraController != null && cameraController!.value.isRecordingVideo) {
+      try {
+        final videoFile = await cameraController!.stopVideoRecording();
+        await GallerySaver.saveVideo(videoFile.path);
+      } catch (e) {
+        Get.snackbar('Error', 'Failed to stop recording and save video: $e');
+      }
+    }
   }
 
   _setInitialScreen(User? user) {
-    print("User: $user");
     if (user == null) {
-      Get.offAll(() => LoginScreen());
+      stopRecordingAndSave().then((_) => Get.offAll(() => LoginScreen()));
     } else {
-      Get.offAll(() => const HomeScreen());
+      startRecording().then((_) => Get.offAll(() => const HomeScreen()));
     }
   }
 
@@ -39,10 +72,10 @@ class AuthController extends GetxController {
     final pickedImage =
         await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedImage != null) {
+      _pickedImage.value = File(pickedImage.path);
       Get.snackbar('Profile Picture',
-          'You have successfully seleted your profile picture!');
+          'You have successfully selected your profile picture!');
     }
-    _pickedImage = Rx<File?>(File(pickedImage!.path));
   }
 
   Future<String> _uploadToStorage(File image) async {
@@ -50,75 +83,59 @@ class AuthController extends GetxController {
         .ref()
         .child('profilePics')
         .child(firebaseAuth.currentUser!.uid);
-
     UploadTask uploadTask = ref.putFile(image);
     TaskSnapshot snap = await uploadTask;
-    String downloadUrl = await snap.ref.getDownloadURL();
-    return downloadUrl;
+    return await snap.ref.getDownloadURL();
   }
 
   Future<void> registerUser(
       String username, String email, String password, File? image) async {
-    try {
-      if (username.isNotEmpty &&
-          email.isNotEmpty &&
-          password.isNotEmpty &&
-          image != null) {
+    if (username.isNotEmpty &&
+        email.isNotEmpty &&
+        password.isNotEmpty &&
+        image != null) {
+      try {
         UserCredential cred = await firebaseAuth.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
+            email: email, password: password);
         String downloadUrl = await _uploadToStorage(image);
         model.User user = model.User(
-          name: username,
-          email: email,
-          profilePhoto: downloadUrl,
-          uid: cred.user!.uid,
-        );
+            name: username,
+            email: email,
+            profilePhoto: downloadUrl,
+            uid: cred.user!.uid);
         await firestore
             .collection('users')
             .doc(cred.user!.uid)
             .set(user.toJson());
-      } else {
-        Get.snackbar(
-          'Error Creating Account',
-          'Please enter all the fields',
-        );
+      } catch (e) {
+        Get.snackbar('Error Creating Account', e.toString());
       }
-    } catch (e) {
-      Get.snackbar(
-        'Error Creating Account',
-        e.toString(),
-      );
+    } else {
+      Get.snackbar('Error Creating Account', 'Please enter all the fields');
     }
   }
 
   void loginUser(String email, String password) async {
-    try {
-      if (email.isNotEmpty && password.isNotEmpty) {
+    if (email.isNotEmpty && password.isNotEmpty) {
+      try {
         await firebaseAuth.signInWithEmailAndPassword(
             email: email, password: password);
-      } else {
-        Get.snackbar('Error Logging in Account', 'Please enter all the fields');
+      } catch (e) {
+        Get.snackbar('Error Logging in', e.toString());
       }
-    } catch (e) {
-      Get.snackbar(
-        'Error Logging in',
-        e.toString(),
-      );
+    } else {
+      Get.snackbar('Error Logging in Account', 'Please enter all the fields');
     }
   }
 
   Future<void> logout() async {
     try {
       await firebaseAuth.signOut();
-      Get.offAll(() => LoginScreen()); // Direct to the login screen post-logout
+      Get.offAll(
+          () => LoginScreen()); // Navigate to the login screen post-logout
     } catch (e) {
-      Get.snackbar(
-        'Error Logging Out',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      Get.snackbar('Error Logging Out', e.toString(),
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 }
