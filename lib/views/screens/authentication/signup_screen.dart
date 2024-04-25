@@ -8,6 +8,7 @@ class SignupScreen extends StatelessWidget {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _guestIdController = TextEditingController();
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,23 +34,6 @@ class SignupScreen extends StatelessWidget {
             ),
             const SizedBox(
               height: 15,
-            ),
-            Stack(
-              children: [
-                const CircleAvatar(
-                  radius: 64,
-                  backgroundImage: NetworkImage(
-                      'https://www.pngitem.com/pimgs/m/150-1503945_transparent-user-png-default-user-image-png-png.png'),
-                  backgroundColor: Colors.black,
-                ),
-                Positioned(
-                    bottom: -10,
-                    left: 80,
-                    child: IconButton(
-                      onPressed: () => authController.pickImage(),
-                      icon: const Icon(Icons.add_a_photo),
-                    ))
-              ],
             ),
             const SizedBox(
               height: 15,
@@ -92,6 +76,19 @@ class SignupScreen extends StatelessWidget {
               height: 30,
             ),
             Container(
+              width: MediaQuery.of(context).size.width,
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextInputField(
+                controller: _guestIdController,
+                labelText: 'GuestID',
+                icon: Icons.lock,
+                isObscure: true,
+              ),
+            ),
+            const SizedBox(
+              height: 30,
+            ),
+            Container(
               width: MediaQuery.of(context).size.width - 40,
               height: 50,
               decoration: BoxDecoration(
@@ -105,7 +102,7 @@ class SignupScreen extends StatelessWidget {
                   _usernameController.text,
                   _emailController.text,
                   _passwordController.text,
-                  authController.profilePhoto,
+                  _guestIdController.text,
                 ),
                 child: const Center(
                   child: Text(

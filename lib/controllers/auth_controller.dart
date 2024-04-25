@@ -60,11 +60,26 @@ class AuthController extends GetxController {
     }
   }
 
-  _setInitialScreen(User? user) {
+  void _setInitialScreen(User? user) {
     if (user == null) {
-      stopRecordingAndSave().then((_) => Get.offAll(() => LoginScreen()));
+      // User logged out
+      stopRecordingAndSave().then((_) {
+        Get.offAll(() => LoginScreen());
+        if (cameraController != null) {
+          cameraController!.dispose();
+          cameraController = null;
+        }
+      });
     } else {
-      startRecording().then((_) => Get.offAll(() => const HomeScreen()));
+      // User logs in or switches accounts
+      if (cameraController == null) {
+        initializeCamera().then((_) {
+          startRecording();
+        });
+      } else {
+        startRecording();
+      }
+      Get.offAll(() => HomeScreen());
     }
   }
 
@@ -89,19 +104,18 @@ class AuthController extends GetxController {
   }
 
   Future<void> registerUser(
-      String username, String email, String password, File? image) async {
+      String username, String email, String password, String guestId) async {
     if (username.isNotEmpty &&
         email.isNotEmpty &&
         password.isNotEmpty &&
-        image != null) {
+        guestId.isNotEmpty) {
       try {
         UserCredential cred = await firebaseAuth.createUserWithEmailAndPassword(
             email: email, password: password);
-        String downloadUrl = await _uploadToStorage(image);
         model.User user = model.User(
             name: username,
             email: email,
-            profilePhoto: downloadUrl,
+            guestId: guestId,
             uid: cred.user!.uid);
         await firestore
             .collection('users')
@@ -130,12 +144,40 @@ class AuthController extends GetxController {
 
   Future<void> logout() async {
     try {
+      await stopRecordingAndSave();
+      await cameraController?.dispose();
+      cameraController = null;
       await firebaseAuth.signOut();
-      Get.offAll(
-          () => LoginScreen()); // Navigate to the login screen post-logout
+      Get.offAll(() => LoginScreen());
     } catch (e) {
       Get.snackbar('Error Logging Out', e.toString(),
           snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  void loginWithGuestId(String guestId) async {
+    if (guestId.isNotEmpty) {
+      try {
+        var userSnapshot = await firestore
+            .collection('users')
+            .where('guestId', isEqualTo: guestId)
+            .limit(1)
+            .get();
+
+        if (userSnapshot.docs.isNotEmpty) {
+          if (cameraController == null) {
+            await initializeCamera();
+          }
+          startRecording();
+          Get.offAll(() => HomeScreen());
+        } else {
+          Get.snackbar('Error', 'Guest ID not found');
+        }
+      } catch (e) {
+        Get.snackbar("Login Error", 'Failed to log in with Guest ID: $e');
+      }
+    } else {
+      Get.snackbar("Error", "Guest ID cannot be empty");
     }
   }
 }

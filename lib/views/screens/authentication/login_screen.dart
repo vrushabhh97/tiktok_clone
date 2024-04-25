@@ -8,6 +8,7 @@ class LoginScreen extends StatelessWidget {
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _guestIdController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -35,15 +36,6 @@ class LoginScreen extends StatelessWidget {
             const SizedBox(
               height: 25,
             ),
-            Container(
-              width: MediaQuery.of(context).size.width,
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextInputField(
-                controller: _emailController,
-                labelText: 'Email',
-                icon: Icons.email,
-              ),
-            ),
             const SizedBox(
               height: 25,
             ),
@@ -51,11 +43,13 @@ class LoginScreen extends StatelessWidget {
               width: MediaQuery.of(context).size.width,
               margin: const EdgeInsets.symmetric(horizontal: 20),
               child: TextInputField(
-                controller: _passwordController,
-                labelText: 'Password',
+                controller: _guestIdController,
+                labelText: 'GuestID',
                 icon: Icons.lock,
-                isObscure: true,
               ),
+            ),
+            const SizedBox(
+              height: 25,
             ),
             const SizedBox(
               height: 30,
@@ -70,8 +64,8 @@ class LoginScreen extends StatelessWidget {
                 ),
               ),
               child: InkWell(
-                onTap: () => authController.loginUser(
-                    _emailController.text, _passwordController.text),
+                onTap: () =>
+                    authController.loginWithGuestId(_guestIdController.text),
                 child: const Center(
                   child: Text(
                     'Login',
