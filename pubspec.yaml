@@ -42,6 +42,7 @@ dependencies:
     path: /Users/vrushabhdeogirikar/Documents/GitHub/gallery_saver
   get: ^4.6.6
   image_picker: ^1.0.8
+  permission_handler: ^11.3.1
   timeago: ^3.6.1
   video_player: ^2.8.6
 

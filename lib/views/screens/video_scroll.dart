@@ -1,120 +1,172 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter/services.dart';
 
 class VideoScroll extends StatefulWidget {
-  const VideoScroll({super.key});
+  const VideoScroll({Key? key}) : super(key: key);
 
   @override
   State<VideoScroll> createState() => _VideoScrollState();
 }
 
 class _VideoScrollState extends State<VideoScroll> {
-  late PageController controller;
-  late List<Widget> reel;
+  late PageController _controller;
+  List<File> _videoFiles = [];
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
-    controller = PageController(initialPage: 0);
-    reel = [
-      VideoPlayerScreen(videoAsset: 'assets/videos/ATV+Game3.mp4'),
-      VideoPlayerScreen(videoAsset: 'assets/videos/LATV+Craft2.mp4'),
-      VideoPlayerScreen(videoAsset: 'assets/videos/LATV+Craft3.mp4'),
-    ];
+    _controller = PageController(initialPage: 0);
+    checkAndRequestPermission();
+  }
+
+  Future<void> checkAndRequestPermission() async {
+    print("Checking storage permission...");
+    var status = await Permission.storage.status;
+    print("Current permission status: $status");
+
+    if (!status.isGranted) {
+      print("Requesting storage permission...");
+      status = await Permission.storage.request();
+      print("Permission status after request: $status");
+    }
+
+    if (status.isGranted) {
+      print("Permission granted, loading videos...");
+      _loadVideos();
+    } else {
+      print("Storage permission is denied.");
+      showPermissionDeniedDialog();
+    }
+  }
+
+  Future<void> showPermissionRationale() async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text("Storage Permission Needed"),
+        content: const Text("This app needs storage access to display videos."),
+        actions: <Widget>[
+          TextButton(
+            child: const Text("Deny"),
+            onPressed: () {
+              Navigator.of(context).pop();
+              showPermissionDeniedDialog();
+            },
+          ),
+          TextButton(
+            child: const Text("Allow"),
+            onPressed: () {
+              Navigator.of(context).pop();
+              requestPermission();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> requestPermission() async {
+    var result = await Permission.storage.request();
+    if (result.isGranted) {
+      _loadVideos();
+    } else {
+      showPermissionDeniedDialog();
+    }
+  }
+
+  void showPermissionDeniedDialog() {
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: Text("Permission Denied"),
+          content: Text(
+              "Without storage permission, this app cannot display videos. You can enable it from app settings."),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Open Settings"),
+              onPressed: () {
+                openAppSettings();
+              },
+            ),
+            TextButton(
+              child: Text("Close"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadVideos() async {
+    final videoDirectory = Directory('/storage/emulated/0/Download/');
+    try {
+      final videoList =
+          videoDirectory.listSync().where((item) => item.path.endsWith('.mp4'));
+      setState(() {
+        _videoFiles = videoList.map((item) => File(item.path)).toList();
+      });
+    } catch (e) {
+      print("Error accessing videos: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: PageView(
-        scrollDirection: Axis.vertical,
-        children: reel,
-        controller: controller,
-      ),
+      body: _videoFiles.isNotEmpty
+          ? PageView.builder(
+              itemCount: _videoFiles.length,
+              controller: _controller,
+              scrollDirection: Axis.vertical,
+              itemBuilder: (_, index) =>
+                  VideoPlayerScreen(videoFile: _videoFiles[index]),
+            )
+          : Center(child: Text("No videos found or permission denied")),
     );
   }
 }
 
 class VideoPlayerScreen extends StatefulWidget {
-  final String videoAsset;
-  const VideoPlayerScreen({Key? key, required this.videoAsset})
+  final File videoFile;
+  const VideoPlayerScreen({Key? key, required this.videoFile})
       : super(key: key);
 
   @override
   _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends State<VideoPlayerScreen>
-    with TickerProviderStateMixin {
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late VideoPlayerController _controller;
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-  Offset _tapPosition = Offset.zero; // Initial tap position
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset(widget.videoAsset)
+    _controller = VideoPlayerController.file(widget.videoFile)
       ..initialize().then((_) {
         setState(() {
           _controller.play();
           _controller.setLooping(true);
         });
       });
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 500),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.5).animate(
-        CurvedAnimation(
-            parent: _animationController, curve: Curves.elasticOut));
-
-    _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(
-            parent: _animationController, curve: Curves.fastOutSlowIn));
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _animationController.dispose();
     super.dispose();
-  }
-
-  void _handleDoubleTap(TapDownDetails details) {
-    setState(() {
-      _tapPosition = details.globalPosition;
-    });
-    _animationController.forward(from: 0.0);
-    HapticFeedback.mediumImpact();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onDoubleTapDown: _handleDoubleTap,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          VideoPlayer(_controller),
-          Positioned(
-            top: _tapPosition.dy - 50, // Adjust the icon to the tap location
-            left: _tapPosition.dx - 50,
-            child: FadeTransition(
-              opacity: _opacityAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: Icon(Icons.favorite, size: 100, color: Colors.red),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AspectRatio(
+      aspectRatio: _controller.value.aspectRatio,
+      child: VideoPlayer(_controller),
     );
   }
 }
